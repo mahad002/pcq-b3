@@ -62,6 +62,16 @@ exports.addUrlAnalysis = async (req, res) => {
     try {
         const db = req.app.locals.db;
 
+        // Check if the URL already exists in the user's urlAnalysisHistory
+        const user = await db.collection('data').findOne(
+            { email, 'urlAnalysisHistory.url': url },
+            { projection: { 'urlAnalysisHistory.$': 1 } }
+        );
+
+        if (user && user.urlAnalysisHistory.length > 0) {
+            return res.status(400).json({ message: 'URL analysis result already exists' });
+        }
+
         await db.collection('data').updateOne(
             { email },
             { $push: { urlAnalysisHistory: { url, result, date: new Date() } } }
@@ -70,7 +80,7 @@ exports.addUrlAnalysis = async (req, res) => {
         res.status(200).json({ message: 'URL analysis result added' });
     } catch (error) {
         res.status(500).json({ error: 'Server error' });
-    }   
+    }
 };
 
 // add code analysis result
