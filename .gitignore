@@ -1,0 +1,37 @@
+# Node modules
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+
+# Build output
+dist/
+build/
+
+# Coverage directory
+coverage/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# IDE and Editor folders
+.vscode/
+.idea/
+*.swp
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Optional: Ignore package-lock.json or yarn.lock if you don't want to track them
+# package-lock.json
+# ya
