@@ -69,7 +69,7 @@ exports.addUrlAnalysis = async (req, res) => {
         );
 
         if (user && user.urlAnalysisHistory.length > 0) {
-            return res.status(400).json({ message: 'URL analysis result already exists' });
+            return res.status(200).json({ message: 'URL analysis result already exists' });
         }
 
         await db.collection('data').updateOne(
