@@ -4,7 +4,7 @@ const User = require('../models/user.js');
 
 // register a new user
 exports.registerUser = async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, username } = req.body;
 
     try {
         const db = req.app.locals.db;
@@ -16,6 +16,7 @@ exports.registerUser = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = {
+            name: username,
             email,
             password: hashedPassword,
             urlAnalysisHistory: [],
@@ -162,6 +163,89 @@ exports.getAnalysisHistory = async (req, res) => {
         });
     } catch (error) {
         console.error('Error fetching analysis history:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Delete user account
+exports.deleteUserAccount = async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        const db = req.app.locals.db;
+
+        // Delete the user from the database
+        const result = await db.collection('data').deleteOne({ email });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.status(200).json({ message: 'Account deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting account:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Change user password
+exports.changeUserPassword = async (req, res) => {
+    const { email, currentPassword, newPassword } = req.body;
+
+    try {
+        const db = req.app.locals.db;
+
+        // Find the user by email
+        const user = await db.collection('data').findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Validate current password
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Current password is incorrect' });
+        }
+
+        // Hash the new password and update it in the database
+        const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+        await db.collection('data').updateOne(
+            { email },
+            { $set: { password: hashedNewPassword } }
+        );
+
+        res.status(200).json({ message: 'Password changed successfully' });
+    } catch (error) {
+        console.error('Error changing password:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Update user details
+exports.updateUserProfile = async (req, res) => {
+    const { email, name, contact } = req.body;
+    console.log(email, name, contact);
+    try {
+        const db = req.app.locals.db;
+
+        // Construct the update object based on provided fields
+        const updateFields = {};
+        if (name) updateFields.name = name;
+        if (contact) updateFields.contact = contact;
+
+        // Update user details in the database
+        const result = await db.collection('data').updateOne(
+            { email },
+            { $set: updateFields }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.status(200).json({ message: 'User profile updated successfully' });
+    } catch (error) {
+        console.error('Error updating user profile:', error);
         res.status(500).json({ error: 'Server error' });
     }
 };

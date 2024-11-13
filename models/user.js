@@ -21,10 +21,12 @@ const githubRepoAnalysisSchema = new mongoose.Schema({
     date: { type: Date, default: Date.now } // date of analysis
 });
 
-// main user schema
+// Main user schema with new fields for name and contact
 const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true }, // user's email (required and unique)
     password: { type: String, required: true }, // user's password (required)
+    name: { type: String, default: '' }, // user's full name (optional, default to empty string)
+    contact: { type: String, default: '' }, // user's contact information (optional, default to empty string)
     urlAnalysisHistory: [urlAnalysisSchema], // array to store URL analysis history
     codeAnalysisHistory: [codeAnalysisSchema], // array to store code analysis history
     githubRepoAnalysisHistory: [githubRepoAnalysisSchema] // array to store GitHub repository analysis history
