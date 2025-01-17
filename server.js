@@ -23,6 +23,10 @@ async function connectToDatabase() {
     }
 }
 
+app.get('/api/test', (req, res) => {
+    res.send('Backend is running!');
+});
+
 connectToDatabase(); // Connect to the database
 
 app.use('/api/users', userRoutes); // Mount the userRoutes middleware at '/api/users' path
