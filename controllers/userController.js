@@ -1,5 +1,8 @@
-const bcrypt = require('bcryptjs');
+const bcrypt1 = require('bcryptjs');
+const nodemailer = require('nodemailer');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/user.js');
 
 // register a new user
@@ -136,6 +139,7 @@ exports.getAnalysisHistory = async (req, res) => {
     }
 
     try {
+        console.log('Fetching analysis history');
         const db = req.app.locals.db;
 
         // Fetch the user based on the email
@@ -150,6 +154,7 @@ exports.getAnalysisHistory = async (req, res) => {
             }
         );
 
+        console.log('User:', user);
         // Check if the user exists
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
@@ -249,3 +254,283 @@ exports.updateUserProfile = async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 };
+
+// Send password recovery email
+exports.sendPasswordRecoveryEmail = async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        const db = req.app.locals.db;
+        const user = await db.collection('data').findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const token = crypto.randomBytes(20).toString('hex');
+        const expiration = Date.now() + 3600000;
+
+        await db.collection('data').updateOne(
+            { email },
+            { $set: { resetPasswordToken: token, resetPasswordExpires: expiration } }
+        );
+
+        const transporter = nodemailer.createTransport({
+            service: 'Gmail',
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+            },
+        });
+
+        const mailOptions = {
+            to: email,
+            from: process.env.EMAIL_USER,
+            subject: 'Password Reset',
+            text: `Click the link to reset your password:
+
+http://${req.headers.host}/reset/${token}
+
+`,
+        };
+
+        await transporter.sendMail(mailOptions);
+        res.status(200).json({ message: 'Recovery email sent' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Reset password
+exports.resetPassword = async (req, res) => {
+    const { token, newPassword } = req.body;
+
+    try {
+        const db = req.app.locals.db;
+
+        const user = await db.collection('data').findOne({
+            resetPasswordToken: token,
+            resetPasswordExpires: { $gt: Date.now() },
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: 'Token invalid or expired' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await db.collection('data').updateOne(
+            { email: user.email },
+            {
+                $set: { password: hashedPassword },
+                $unset: { resetPasswordToken: '', resetPasswordExpires: '' },
+            }
+        );
+
+        res.status(200).json({ message: 'Password reset successful' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Update notification preferences
+exports.updateNotificationPreferences = async (req, res) => {
+    const { email, preferences } = req.body;
+
+    try {
+        const db = req.app.locals.db;
+        await db.collection('data').updateOne(
+            { email },
+            { $set: { notificationPreferences: preferences } }
+        );
+
+        res.status(200).json({ message: 'Notification preferences updated' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Get active sessions
+exports.getActiveSessions = async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        const db = req.app.locals.db;
+        const user = await db.collection('data').findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.status(200).json({ activeSessions: user.activeSessions });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Terminate a session
+exports.terminateSession = async (req, res) => {
+    const { email, sessionId } = req.body;
+
+    try {
+        const db = req.app.locals.db;
+        const result = await db.collection('data').updateOne(
+            { email },
+            { $pull: { activeSessions: { sessionId } } }
+        );
+
+        if (result.modifiedCount === 0) {
+            return res.status(404).json({ message: 'Session not found' });
+        }
+
+        res.status(200).json({ message: 'Session terminated' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Deactivate account
+exports.deactivateAccount = async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        const db = req.app.locals.db;
+
+        await db.collection('data').updateOne(
+            { email },
+            { $set: { isActive: false } }
+        );
+
+        res.status(200).json({ message: 'Account deactivated successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Assign a role to a user
+exports.assignUserRole = async (req, res) => {
+    const { email, role } = req.body;
+
+    try {
+        const db = req.app.locals.db;
+
+        const result = await db.collection('data').updateOne(
+            { email },
+            { $set: { role } }
+        );
+
+        if (result.modifiedCount === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.status(200).json({ message: 'Role assigned successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Middleware to check user role
+exports.checkRole = (requiredRole) => {
+    return async (req, res, next) => {
+        const { email } = req.body;
+
+        try {
+            const db = req.app.locals.db;
+            const user = await db.collection('data').findOne({ email });
+
+            if (!user || user.role !== requiredRole) {
+                return res.status(403).json({ message: 'Access denied' });
+            }
+
+            next();
+        } catch (error) {
+            res.status(500).json({ error: 'Server error' });
+        }
+    };
+};
+
+// Create a group
+exports.createGroup = async (req, res) => {
+    const { groupName, members, permissions } = req.body;
+
+    try {
+        const db = req.app.locals.db;
+
+        const newGroup = {
+            groupName,
+            members, // Array of user emails
+            permissions, // Array of permissions for the group
+            createdAt: new Date(),
+        };
+
+        const result = await db.collection('groups').insertOne(newGroup);
+
+        res.status(201).json({ groupId: result.insertedId, message: 'Group created successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+// Assign a group to a user
+exports.assignUserToGroup = async (req, res) => {
+    const { email, groupId } = req.body;
+
+    try {
+        const db = req.app.locals.db;
+
+        const result = await db.collection('data').updateOne(
+            { email },
+            { $set: { groupId } }
+        );
+
+        if (result.modifiedCount === 0) {
+            return res.status(404).json({ message: 'User not found or group not assigned' });
+        }
+
+        res.status(200).json({ message: 'User assigned to group successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+exports.getUserSettings = async (req, res) => {
+    try {
+      const { userId } = req.user;
+      console.log(userId);
+  
+      const email = req.query.email; // Extract email from query string
+  
+      console.log('Fetching user settings for email:', email);
+  
+      const db = req.app.locals.db;
+      const user = await db.collection('data').findOne(
+        { email },
+        {
+          projection: {
+            name: 1,
+            contact: 1,
+            email: 1,
+            'notificationPreferences.emailNotifications': 1,
+            'notificationPreferences.smsNotifications': 1,
+          },
+        }
+      );
+  
+      console.log('User:', user);
+  
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+  
+      res.status(200).json({
+        name: user.name,
+        contact: user.contact,
+        email: user.email,
+        // emailNotifications: user.notificationPreferences.emailNotifications,
+        // smsNotifications: user.notificationPreferences.smsNotifications,
+      });
+    } catch (error) {
+      console.error('Error fetching user settings:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  };
+  
