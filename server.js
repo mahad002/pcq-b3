@@ -3,6 +3,8 @@ const { MongoClient } = require('mongodb'); // Import the MongoClient from the m
 const dotenv = require('dotenv'); // Import the dotenv module for environment variables
 const cors = require('cors'); // Import the cors module
 const userRoutes = require('./routes/userRoutes'); // Import the userRoutes module
+const activityRoutes = require('./routes/activityRoutes'); // Import the activityRoutes module
+const testRoutes = require('./routes/testRoutes'); // Import the testRoutes module
 
 dotenv.config(); // Load environment variables from .env file
 const app = express(); // Create an instance of the express application
@@ -30,6 +32,8 @@ app.get('/api/test', (req, res) => {
 connectToDatabase(); // Connect to the database
 
 app.use('/api/users', userRoutes); // Mount the userRoutes middleware at '/api/users' path
+app.use('/api/activity', activityRoutes); // Mount the activityRoutes middleware at '/api/activity' path
+app.use('/api/test', testRoutes); // Mount the testRoutes middleware at '/api/test' path
 
 const PORT = process.env.PORT || 8002; // Get the port number from environment variables or use 8002 as default
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`)); // Start the server and listen on the specified port
